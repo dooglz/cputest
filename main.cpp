@@ -54,26 +54,26 @@ int main(int argc, char* argv[]) {
   selectedAlgo = DEAFULT_ALGO;
   //
   if (argc > 1) {
-    frameLimit = (size_t)std::stoul(__argv[1]);
+    frameLimit = (size_t)std::stoul(argv[1]);
   }
   if (argc > 2) {
-    bodyCount_max = (size_t)std::stoul(__argv[2]);
+    bodyCount_max = (size_t)std::stoul(argv[2]);
     bodyCount_min = bodyCount_max;
   }
   if (argc > 3) {
-    bodyCount_min = (size_t)std::stoul(__argv[3]);
+    bodyCount_min = (size_t)std::stoul(argv[3]);
   }
   if (argc > 4) {
-    runs = (size_t)std::stoul(__argv[4]);
+    runs = (size_t)std::stoul(argv[4]);
   }
   if (argc > 5) {
-    step = (size_t)std::stoul(__argv[5]);
+    step = (size_t)std::stoul(argv[5]);
   }
   if (argc > 6) {
-    verbosity = (uint8_t)std::stoul(__argv[6]);
+    verbosity = (uint8_t)std::stoul(argv[6]);
   }
   if (argc > 7) {
-    selectedAlgo = (algo)std::stoul(__argv[7]);
+    selectedAlgo = (algo)std::stoul(argv[7]);
   }
 
   log(1, std::cout << "AGO:" << selectedAlgo << std::endl);
@@ -165,7 +165,7 @@ timeUnit simStep() {
 timeUnit simStepOMP() {
   const auto start = std::chrono::high_resolution_clock::now();
   const accuracy delta = 1;
-#pragma omp parallel for shared(bodies, bodyCount, delta)
+#pragma omp parallel for shared(bodies, bodyCount)
   for (int i = 0; i < bodyCount; i++) {
     Vec3 newVelo;
     const auto pos = bodies[i].pos;
