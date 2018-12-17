@@ -104,7 +104,6 @@ int main(int argc, char **argv) {
         DoSomethingWithBodies();
       }//end Tick loop
       const auto runEnd = std::chrono::high_resolution_clock::now();
-      teardown();
       walltimes[r] = std::chrono::duration_cast<timeUnit>(runEnd - RunStart);
       //--Print Metrics
       metrics[r] = getMetrics(frameTimes, frameLimit);
@@ -113,11 +112,12 @@ int main(int argc, char **argv) {
         log(3, "Sleeping for " << sleeptimeR << "ms");
         std::this_thread::sleep_for(std::chrono::milliseconds(sleeptimeR));
       }
+      teardown();
     }//end Run loop
     const auto m = getMetrics(metrics, runs, GETMEAN).mean;
     const auto wtm = getMetrics(walltimes, runs);
     log(1, bodyCount << "," << frameLimit << "," << runs << "," << m << "," << getMetrics(metrics, runs, GETSD).mean
-                     << "," << (m / (accuracy)bodyCount) << "," << wtm.mean);
+                     << "," << (bodyCount!=0?(m / (accuracy)(bodyCount)) :0) << "," << wtm.mean);
     delete[] metrics;
     delete[] walltimes;
   }
