@@ -5,6 +5,7 @@
 #include <random>
 #include <string>
 #include <thread>
+#include <omp.h>
 
 //#define accuracy float
 #define accuracy double
@@ -26,8 +27,10 @@ algo selectedAlgo = CPUSEQ;
 uint8_t verbosity = 0;
 size_t bodyCount = 0;
 size_t frameLimit = 0;
+size_t sleeptimeT = 0;
 Body *bodies;
 timeUnit *frameTimes;
+
 // functions
 timeUnit simStep();
 timeUnit simStepOMP();
@@ -37,16 +40,15 @@ void teardown();
 void DoSomethingWithBodies() {
   return;
   volatile unsigned u = 0;
-  // to stop the compiler hoptimising everything out.
+  // to stop the compiler optimising everything out.
   while (u) {
     std::this_thread::sleep_for(std::chrono::seconds(1000));
   }
-  //  std::this_thread::sleep_for(std::chrono::seconds(1));
   NO_OPT(bodies);
 }
 
 int main(int argc, char **argv) {
-  size_t bodyCount_min, bodyCount_max, sleeptime, runs, step;
+  size_t bodyCount_min, bodyCount_max, sleeptimeR, runs, step;
   // defaults
   bodyCount_max = bodyCount_min = DEFAULT_BODYCOUNT;
   frameLimit = DEFAULT_FRAMELIMIT;
@@ -54,7 +56,7 @@ int main(int argc, char **argv) {
   step = DEFAULT_BODYCOUNT_STEP;
   verbosity = DEFAULT_VERBOSITY;
   selectedAlgo = DEFAULT_ALGO;
-  sleeptime = DEFAULT_SLEEP;
+  sleeptimeR = sleeptimeT = DEFAULT_SLEEP;
   // parse cmdline
   CLI::App app{"CPU NBODY TEST"};
   app.add_option("--bmax", bodyCount_max, "BodyCount Max");
@@ -64,23 +66,27 @@ int main(int argc, char **argv) {
   app.add_option("-r", runs, "Runs per BodyCount");
   app.add_option("-v", verbosity, "verbosity (0,1,2,3)");
   app.add_option("-a", selectedAlgo, "ALGO(0,1,2)");
-  app.add_option("-s", sleeptime, "sleep time");
+  app.add_option("--sleepR", sleeptimeR, "sleep time between Runs");
+  app.add_option("--sleepT", sleeptimeT, "sleep time between Ticks");
   CLI11_PARSE(app, argc, argv);
   // sanitize limits
   bodyCount_min = std::min(bodyCount_min, bodyCount_max);
   bodyCount_max = std::max(bodyCount_max, bodyCount_min);
   // Print Headder
   log(1, "BC: " << bodyCount_min << " ->" << bodyCount_max << " " << step);
-  log(1, "AGO:" << selectedAlgo);
-  log(1, "SLEEP:" << sleeptime << ",\tTicks:" << frameLimit << ",\tRuns:" << runs);
-  loge(1, "BC,\tTicks,\tRuns,\tMean,\tSD,\tSpeedPerBody");
+  log(1, "AGO:" << selectedAlgo << "\nSleepT:" << sleeptimeT << ",SleepR:" << sleeptimeR << "\nTicks:" << frameLimit
+                << "\ntRuns:" << runs << "\nOMP threads:" << omp_get_max_threads());
+  loge(1, "BC,Ticks,Runs,Mean,SD,Time/Body,RunTime");
   // GO!
   for (size_t k = bodyCount_min; k <= bodyCount_max; k += step) {
     bodyCount = k;
-    init();
     Metric *metrics = new Metric[runs];
+    auto walltimes = new timeUnit[runs];
     log(2, "---\nBodycount:" << k << ",\tFrames " << frameLimit << ",\tStarting " << runs << " runs");
+
     for (size_t r = 0; r < runs; r++) {
+      init();
+      const auto RunStart = std::chrono::high_resolution_clock::now();
       for (size_t i = 0; i < frameLimit; i++) {
         switch (selectedAlgo) {
         case CPUSEQ:
@@ -92,18 +98,28 @@ int main(int argc, char **argv) {
         default:
           break;
         }
-        if (sleeptime > 0) {
-          std::this_thread::sleep_for(std::chrono::milliseconds(sleeptime));
+        if (sleeptimeT > 0) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(sleeptimeT));
         }
         DoSomethingWithBodies();
-      }
+      }//end Tick loop
+      const auto runEnd = std::chrono::high_resolution_clock::now();
+      teardown();
+      walltimes[r] = std::chrono::duration_cast<timeUnit>(runEnd - RunStart);
+      //--Print Metrics
       metrics[r] = getMetrics(frameTimes, frameLimit);
       log(2, metrics[r]);
-    }
+      if (sleeptimeR > 0) {
+        log(3, "Sleeping for " << sleeptimeR << "ms");
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleeptimeR));
+      }
+    }//end Run loop
     const auto m = getMetrics(metrics, runs, GETMEAN).mean;
+    const auto wtm = getMetrics(walltimes, runs);
     log(1, bodyCount << "," << frameLimit << "," << runs << "," << m << "," << getMetrics(metrics, runs, GETSD).mean
-                     << "," << (m / (accuracy)bodyCount));
-    teardown();
+                     << "," << (m / (accuracy)bodyCount) << "," << wtm.mean);
+    delete[] metrics;
+    delete[] walltimes;
   }
 }
 
