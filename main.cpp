@@ -1,3 +1,4 @@
+#include "CLI11.hpp"
 #include <chrono>
 #include <cmath>
 #include <iostream>
@@ -9,24 +10,24 @@
 #define accuracy double
 //#define accuracy long double
 #define timeUnit std::chrono::microseconds
-#define DEAFULT_BODYCOUNT 1024 << 2
-#define DEAFULT_BODYCOUNT_STEP 256
-#define DEAFULT_FRAMELIMIT 200
-#define DEAFULT_RUNS 10
-#define DEAFULT_VERBOSITY 1
-#define DEAFULT_ALGO CPUOMP
-#define DEAFULT_SLEEP 100
+#define DEFAULT_BODYCOUNT 50
+#define DEFAULT_BODYCOUNT_STEP 50
+#define DEFAULT_FRAMELIMIT 100
+#define DEFAULT_RUNS 5
+#define DEFAULT_VERBOSITY 1
+#define DEFAULT_ALGO CPUSEQ
+#define DEFAULT_SLEEP 0
+enum algo { CPUSEQ, CPUOMP };
 // must include v this v after ^these macros^
 #include "mathsandthings.h"
 
 // globals
-enum algo { CPUSEQ, CPUOMP, CPUOMP_SLEEP };
 algo selectedAlgo = CPUSEQ;
 uint8_t verbosity = 0;
 size_t bodyCount = 0;
 size_t frameLimit = 0;
-Body* bodies;
-timeUnit* frameTimes;
+Body *bodies;
+timeUnit *frameTimes;
 // functions
 timeUnit simStep();
 timeUnit simStepOMP();
@@ -44,54 +45,41 @@ void DoSomethingWithBodies() {
   NO_OPT(bodies);
 }
 
-int main(int argc, char* argv[]) {
-  size_t bodyCount_min, bodyCount_max;
+int main(int argc, char **argv) {
+  size_t bodyCount_min, bodyCount_max, sleeptime, runs, step;
   // defaults
-  bodyCount_max = bodyCount_min = DEAFULT_BODYCOUNT;
-  frameLimit = DEAFULT_FRAMELIMIT;
-  size_t runs = DEAFULT_RUNS;
-  size_t step = DEAFULT_BODYCOUNT_STEP;
-  verbosity = DEAFULT_VERBOSITY;
-  selectedAlgo = DEAFULT_ALGO;
-  size_t sleeptime = DEAFULT_SLEEP;
-  //
-  if (argc > 1) {
-    frameLimit = (size_t)std::stoul(argv[1]);
-  }
-  if (argc > 2) {
-    bodyCount_max = (size_t)std::stoul(argv[2]);
-    bodyCount_min = bodyCount_max;
-  }
-  if (argc > 3) {
-    bodyCount_min = (size_t)std::stoul(argv[3]);
-  }
-  if (argc > 4) {
-    runs = (size_t)std::stoul(argv[4]);
-  }
-  if (argc > 5) {
-    step = (size_t)std::stoul(argv[5]);
-  }
-  if (argc > 6) {
-    verbosity = (uint8_t)std::stoul(argv[6]);
-  }
-  if (argc > 7) {
-    selectedAlgo = (algo)std::stoul(argv[7]);
-  }
-  if(argc > 8){
-   sleeptime = (size_t)std::stoul(argv[8]);
-  }
-
-  log(1, std::cout << "AGO:" << selectedAlgo << std::endl);
-  if(selectedAlgo == CPUOMP_SLEEP){
-	log(1, std::cout << "SLEEP:" << sleeptime << std::endl);
-  }
-  loge(1, std::cout << "BC,\tTicks,\tRuns,\tMean,\tSD,\tSpeedPerBody" << std::endl);
+  bodyCount_max = bodyCount_min = DEFAULT_BODYCOUNT;
+  frameLimit = DEFAULT_FRAMELIMIT;
+  runs = DEFAULT_RUNS;
+  step = DEFAULT_BODYCOUNT_STEP;
+  verbosity = DEFAULT_VERBOSITY;
+  selectedAlgo = DEFAULT_ALGO;
+  sleeptime = DEFAULT_SLEEP;
+  // parse cmdline
+  CLI::App app{"CPU NBODY TEST"};
+  app.add_option("--bmax", bodyCount_max, "BodyCount Max");
+  app.add_option("--bmin", bodyCount_min, "BodyCount Max");
+  app.add_option("--bs", step, "BodyCount step");
+  app.add_option("-f", frameLimit, "Physics frames per run");
+  app.add_option("-r", runs, "Runs per BodyCount");
+  app.add_option("-v", verbosity, "verbosity (0,1,2,3)");
+  app.add_option("-a", selectedAlgo, "ALGO(0,1,2)");
+  app.add_option("-s", sleeptime, "sleep time");
+  CLI11_PARSE(app, argc, argv);
+  // sanitize limits
+  bodyCount_min = std::min(bodyCount_min, bodyCount_max);
+  bodyCount_max = std::max(bodyCount_max, bodyCount_min);
+  // Print Headder
+  log(1, "BC: " << bodyCount_min << " ->" << bodyCount_max << " " << step);
+  log(1, "AGO:" << selectedAlgo);
+  log(1, "SLEEP:" << sleeptime << ",\tTicks:" << frameLimit << ",\tRuns:" << runs);
+  loge(1, "BC,\tTicks,\tRuns,\tMean,\tSD,\tSpeedPerBody");
+  // GO!
   for (size_t k = bodyCount_min; k <= bodyCount_max; k += step) {
     bodyCount = k;
     init();
-    Metric* metrics = new Metric[runs];
-    log(2, std::cout << "---\nBodycount:" << k << ",\tFrames " << frameLimit << ",\tStarting "
-                     << runs << " runs" << std::endl);
+    Metric *metrics = new Metric[runs];
+    log(2, "---\nBodycount:" << k << ",\tFrames " << frameLimit << ",\tStarting " << runs << " runs");
     for (size_t r = 0; r < runs; r++) {
       for (size_t i = 0; i < frameLimit; i++) {
         switch (selectedAlgo) {
@@ -101,28 +89,20 @@ int main(int argc, char* argv[]) {
         case CPUOMP:
           frameTimes[i] = simStepOMP();
           break;
-	case CPUOMP_SLEEP:
-	  frameTimes[i] = simStepOMP();
-          std::this_thread::sleep_for(std::chrono::milliseconds(sleeptime));
-	  break;
         default:
           break;
+        }
+        if (sleeptime > 0) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(sleeptime));
         }
         DoSomethingWithBodies();
       }
       metrics[r] = getMetrics(frameTimes, frameLimit);
-      loge(3, std::cout << metrics[r] << std::endl);
-      loge(2, std::cout << '.');
+      log(2, metrics[r]);
     }
-    loge(2, std::cout << std::endl;);
-    log(2, std::cout << "--- " << bodyCount << "," << frameLimit << "," << runs << std::endl);
-    log(2, std::cout << "Total SD:\t" << getMetrics(metrics, runs, GETSD) << std::endl);
-    log(2, std::cout << "Total Mean:\t" << getMetrics(metrics, runs, GETMEAN) << std::endl);
-
-    loge(1, const auto m = getMetrics(metrics, runs, GETMEAN).mean;
-         std::cout << bodyCount << ",\t" << frameLimit << ",\t" << runs << ",\t" << m << ",\t"
-                   << getMetrics(metrics, runs, GETSD).mean << ",\t" << (m / (accuracy)bodyCount)
-                   << std::endl);
+    const auto m = getMetrics(metrics, runs, GETMEAN).mean;
+    log(1, bodyCount << "," << frameLimit << "," << runs << "," << m << "," << getMetrics(metrics, runs, GETSD).mean
+                     << "," << (m / (accuracy)bodyCount));
     teardown();
   }
 }
@@ -148,7 +128,6 @@ void teardown() {
 }
 
 timeUnit simStep() {
-  // volatile unsigned u = 0;
   const auto start = std::chrono::high_resolution_clock::now();
   const accuracy delta = 1;
   for (int i = 0; i < bodyCount; i++) {
@@ -161,7 +140,7 @@ timeUnit simStep() {
       const Vec3 r = bodies[j].pos - pos;
       const accuracy distSqr = Vec3::dot(r, r);
       if (distSqr > 0.1f) {
-        accuracy invDist = 1.0f / sqrtf(distSqr);
+        accuracy invDist = ((accuracy)1.0) / sqrt(distSqr);
         accuracy invDist3 = invDist * invDist * invDist;
         newVelo += r * invDist3;
       }
@@ -188,7 +167,7 @@ timeUnit simStepOMP() {
       const Vec3 r = bodies[j].pos - pos;
       const accuracy distSqr = Vec3::dot(r, r);
       if (distSqr > 0.1f) {
-        accuracy invDist = 1.0f / sqrtf(distSqr);
+        accuracy invDist = ((accuracy)1.0) / sqrt(distSqr);
         accuracy invDistCubed = invDist * invDist * invDist;
         newVelo += (r * invDistCubed);
       }
