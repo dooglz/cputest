@@ -15,11 +15,12 @@
 #define DEAFULT_RUNS 10
 #define DEAFULT_VERBOSITY 1
 #define DEAFULT_ALGO CPUOMP
+#define DEAFULT_SLEEP 100
 // must include v this v after ^these macros^
 #include "mathsandthings.h"
 
 // globals
-enum algo { CPUSEQ, CPUOMP };
+enum algo { CPUSEQ, CPUOMP, CPUOMP_SLEEP };
 algo selectedAlgo = CPUSEQ;
 uint8_t verbosity = 0;
 size_t bodyCount = 0;
@@ -52,6 +53,7 @@ int main(int argc, char* argv[]) {
   size_t step = DEAFULT_BODYCOUNT_STEP;
   verbosity = DEAFULT_VERBOSITY;
   selectedAlgo = DEAFULT_ALGO;
+  size_t sleeptime = DEAFULT_SLEEP;
   //
   if (argc > 1) {
     frameLimit = (size_t)std::stoul(argv[1]);
@@ -75,8 +77,14 @@ int main(int argc, char* argv[]) {
   if (argc > 7) {
     selectedAlgo = (algo)std::stoul(argv[7]);
   }
+  if(argc > 8){
+   sleeptime = (size_t)std::stoul(argv[8]);
+  }
 
   log(1, std::cout << "AGO:" << selectedAlgo << std::endl);
+  if(selectedAlgo == CPUOMP_SLEEP){
+	log(1, std::cout << "SLEEP:" << sleeptime << std::endl);
+  }
   loge(1, std::cout << "BC,\tTicks,\tRuns,\tMean,\tSD,\tSpeedPerBody" << std::endl);
   for (size_t k = bodyCount_min; k <= bodyCount_max; k += step) {
     bodyCount = k;
@@ -93,6 +101,10 @@ int main(int argc, char* argv[]) {
         case CPUOMP:
           frameTimes[i] = simStepOMP();
           break;
+	case CPUOMP_SLEEP:
+	  frameTimes[i] = simStepOMP();
+          std::this_thread::sleep_for(std::chrono::milliseconds(sleeptime));
+	  break;
         default:
           break;
         }
