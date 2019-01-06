@@ -24,29 +24,38 @@ template <typename T> _Vec3<T> operator-(const _Vec3<T> &l, const _Vec3<T> &r) {
   return _Vec3<T>(l.x - r.x, l.y - r.y, l.z - r.z);
 }
 template <typename T> _Vec3<T> operator*(const _Vec3<T> &l, const T &r) { return _Vec3<T>(l.x * r, l.y * r, l.z * r); }
+template <typename T> _Vec3<T> operator/(const _Vec3<T>& l, const T& r) {
+  return _Vec3<T>(l.x / r, l.y / r, l.z / r);
+}
 template <typename T> _Vec3<T> operator+=(_Vec3<T> &l, const _Vec3<T> &r) {
   l.x += r.x;
   l.y += r.y;
   l.z += r.z;
-  // auto ret = _Vec3<T>(x, y, z);
   return l;
-  // return _Vec3<T>(l.x + r.x, l.y + r.y, l.z + r.z);
 }
-/*
-template <typename T> _Vec3<T>& operator+=(const _Vec3<T>& r) {
-  x += r.x;
-  y += r.y;
-  z += r.z;
+template <typename T> _Vec3<T> operator-=(_Vec3<T>& l, const _Vec3<T>& r) {
+  l.x -= r.x;
+  l.y -= r.y;
+  l.z -= r.z;
+  return l;
 }
-*/
 
 template <typename T> struct _Body {
   T pos, speed;
   _Body(T _p) : pos(_p){};
   _Body() = default;
 };
+
+template <typename T> struct _PBody : public _Body<T> {
+  T forces;
+  accuracy mass;
+  _PBody() = default;
+};
+
+
 typedef _Vec3<accuracy> Vec3;
 typedef _Body<Vec3> Body;
+typedef _PBody<Vec3> PBody;
 
 template <typename T, typename L> Metric getMetrics(T *arr, size_t size, L lambda) {
   accuracy min = std::numeric_limits<accuracy>::max();
